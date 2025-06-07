@@ -5,10 +5,6 @@ export interface OutlineKey {
   id: string;
   name: string;
   accessUrl: string;
-  usedBytes: number;
-  dataLimit?: {
-    bytes: number;
-  };
 }
 
 class OutlineService {
