@@ -1,0 +1,41 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum UserState {
+  IDLE
+  AWAITING_API_URL
+}
+
+model User {
+  id         Int       @id @default(autoincrement())
+  telegramId BigInt    @unique
+  firstName  String
+  username   String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  state      UserState @default(IDLE)
+
+  servers Server[]
+
+  selectedServerId Int?
+  selectedServer   Server? @relation("SelectedServer", fields: [selectedServerId], references: [id], onDelete: SetNull)
+}
+
+model Server {
+  id        Int      @id @default(autoincrement())
+  apiUrl    String   @unique
+  alias     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId BigInt
+  user   User   @relation(fields: [userId], references: [telegramId])
+
+  selectedByUsers User[] @relation("SelectedServer")
+}
