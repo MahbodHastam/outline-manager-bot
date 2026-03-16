@@ -55,6 +55,8 @@ Before you begin, make sure you have the following:
 
     ```sh
     pnpm install
+    pnpm exec prisma generate
+    pnpm exec prisma db push
     pnpm build
     ```
 
