@@ -1,4 +1,4 @@
-import { Server } from '@prisma/client';
+import type { Server } from '@prisma/client';
 import { Markup } from 'telegraf';
 import OutlineService, { OutlineKey } from '../services/outline.service';
 import { MyContext } from '../types/context';

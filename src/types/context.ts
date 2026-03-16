@@ -1,5 +1,5 @@
-import { PrismaClient } from '@prisma/client';
 import { Context } from 'telegraf';
+import type { PrismaClient } from '@prisma/client';
 
 export interface MyContext extends Context {
   prisma: PrismaClient;

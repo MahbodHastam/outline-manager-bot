@@ -9,6 +9,7 @@
     "start": "node dist/index.js",
     "db:studio": "pnpm dlx prisma studio",
     "format": "prettier --write \"src/**/*.ts\"",
+    "postinstall": "prisma generate",
     "prepare": "husky"
   },
   "keywords": [],
