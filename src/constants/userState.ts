@@ -1,0 +1,8 @@
+export const USER_STATE = {
+  IDLE: 'IDLE',
+  AWAITING_API_URL: 'AWAITING_API_URL',
+  AWAITING_CUSTOM_DOMAIN: 'AWAITING_CUSTOM_DOMAIN',
+  RENAMING_KEY_PREFIX: 'RENAMING_KEY:',
+} as const;
+
+export type UserStateValue = string;

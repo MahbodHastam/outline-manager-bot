@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { bot } from './core/bot';
+import { startCustomDomainServer } from './core/custom-domain-server';
 import { prisma } from './core/prisma';
 import {
   startComposer,
@@ -27,6 +28,21 @@ bot.catch((error, context) => {
 
 console.log('Bot is starting...');
 bot.launch();
+const customDomainServer = startCustomDomainServer();
 
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
+const shutdown = async (signal: 'SIGINT' | 'SIGTERM') => {
+  bot.stop(signal);
+  customDomainServer.close();
+  await prisma.$disconnect();
+};
+
+process.once('SIGINT', () => {
+  shutdown('SIGINT').catch((error) => {
+    console.error('Graceful shutdown failed on SIGINT ->', error);
+  });
+});
+process.once('SIGTERM', () => {
+  shutdown('SIGTERM').catch((error) => {
+    console.error('Graceful shutdown failed on SIGTERM ->', error);
+  });
+});

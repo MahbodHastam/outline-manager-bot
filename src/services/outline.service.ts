@@ -22,8 +22,35 @@ class OutlineService {
     };
   }
 
+  private async _requestWithRetry<T>(
+    method: 'GET' | 'POST' | 'DELETE' | 'PUT',
+    path: string,
+    body?: object,
+    maxAttempts = 3,
+  ): Promise<T> {
+    let lastError: unknown;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        return await this._request<T>(method, path, body);
+      } catch (error) {
+        lastError = error;
+        if (attempt === maxAttempts) {
+          throw error;
+        }
+
+        const delayMs = attempt * 1000;
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+    }
+
+    throw lastError instanceof Error
+      ? lastError
+      : new Error('Request failed after retries');
+  }
+
   private _request<T>(
-    method: 'GET' | 'POST' | 'DELETE',
+    method: 'GET' | 'POST' | 'DELETE' | 'PUT',
     path: string,
     body?: object,
   ): Promise<T> {
@@ -66,12 +93,18 @@ class OutlineService {
         });
       });
 
+      req.setTimeout(15000, () => {
+        req.destroy(new Error('Request timed out'));
+      });
+
       req.on('error', (error) => {
         console.error(`Request error for ${method} ${path} ->`, error);
         reject(error);
       });
 
-      if (body && method === 'POST') [req.write(JSON.stringify(body))];
+      if (body && (method === 'POST' || method === 'PUT')) {
+        req.write(JSON.stringify(body));
+      }
 
       req.end();
     });
@@ -79,7 +112,7 @@ class OutlineService {
 
   public async validate(): Promise<boolean> {
     try {
-      await this._request('GET', 'server');
+      await this._requestWithRetry('GET', 'server');
       return true;
     } catch (error) {
       console.error('Failed to validate API URL ->', error);
@@ -89,7 +122,7 @@ class OutlineService {
 
   public async getKeys(): Promise<OutlineKey[] | null> {
     try {
-      const data = await this._request<{ accessKeys: OutlineKey[] }>(
+      const data = await this._requestWithRetry<{ accessKeys: OutlineKey[] }>(
         'GET',
         'access-keys/',
       );
@@ -104,7 +137,11 @@ class OutlineService {
   public async createKey(name?: string): Promise<OutlineKey | null> {
     try {
       const body = name ? { name } : {};
-      return await this._request<OutlineKey>('POST', 'access-keys/', body);
+      return await this._requestWithRetry<OutlineKey>(
+        'POST',
+        'access-keys/',
+        body,
+      );
     } catch (error) {
       console.error('Failed to create key:', error);
       return null;
@@ -113,10 +150,22 @@ class OutlineService {
 
   public async deleteKey(keyId: string): Promise<boolean> {
     try {
-      await this._request('DELETE', `access-keys/${keyId}`);
+      await this._requestWithRetry('DELETE', `access-keys/${keyId}`);
       return true;
     } catch (error) {
       console.error(`Failed to delete key ${keyId}:`, error);
+      return false;
+    }
+  }
+
+  public async renameKey(keyId: string, name: string): Promise<boolean> {
+    try {
+      await this._requestWithRetry('PUT', `access-keys/${keyId}/name`, {
+        name,
+      });
+      return true;
+    } catch (error) {
+      console.error(`Failed to rename key ${keyId}:`, error);
       return false;
     }
   }

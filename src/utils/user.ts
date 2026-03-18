@@ -1,5 +1,5 @@
-import { UserState } from '@prisma/client';
 import { MyContext } from '../types/context';
+import { USER_STATE } from '../constants/userState';
 
 export const getOrCreateUser = async (context: MyContext) => {
   const from = context.from;
@@ -12,7 +12,7 @@ export const getOrCreateUser = async (context: MyContext) => {
       telegramId: from.id,
       firstName: from.first_name,
       username: from.username,
-      state: UserState.IDLE,
+      state: USER_STATE.IDLE,
     },
   });
 };

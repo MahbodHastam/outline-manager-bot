@@ -1,16 +1,10 @@
 generator client {
   provider = "prisma-client-js"
-  output   = "../node_modules/.prisma/client"
 }
 
 datasource db {
   provider = "sqlite"
   url      = env("DATABASE_URL")
-}
-
-enum UserState {
-  IDLE
-  AWAITING_API_URL
 }
 
 model User {
@@ -20,7 +14,7 @@ model User {
   username   String?
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
-  state      UserState @default(IDLE)
+  state      String    @default("IDLE")
 
   servers Server[]
 
@@ -29,14 +23,29 @@ model User {
 }
 
 model Server {
-  id        Int      @id @default(autoincrement())
-  apiUrl    String   @unique
-  alias     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           Int      @id @default(autoincrement())
+  apiUrl       String   @unique
+  alias        String?
+  customDomain String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   userId BigInt
   user   User   @relation(fields: [userId], references: [telegramId])
 
+  keyAliases      AccessKeyAlias[]
   selectedByUsers User[] @relation("SelectedServer")
+}
+
+model AccessKeyAlias {
+  id           Int      @id @default(autoincrement())
+  alias        String   @unique
+  outlineKeyId String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  serverId Int
+  server   Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@unique([serverId, outlineKeyId])
 }

@@ -1,6 +1,6 @@
-import { UserState } from '@prisma/client';
 import { Composer } from 'telegraf';
 import { MyContext } from '../types/context';
+import { USER_STATE } from '../constants/userState';
 import { getOrCreateUser } from '../utils/user';
 import { keyboards } from '../views/keyboards';
 
@@ -11,7 +11,7 @@ composer.start(async (context) => {
   if (!user) return;
   await context.prisma.user.update({
     where: { telegramId: context.from!.id },
-    data: { state: UserState.IDLE, selectedServerId: null },
+    data: { state: USER_STATE.IDLE, selectedServerId: null },
   });
   await context.reply(
     `Welcome, ${user.firstName}! I'm your Outline Manager Bot.`,
@@ -24,7 +24,7 @@ composer.action('go_back_main', async (context) => {
   if (!user) return;
   await context.prisma.user.update({
     where: { telegramId: user.telegramId },
-    data: { state: UserState.IDLE, selectedServerId: null },
+    data: { state: USER_STATE.IDLE, selectedServerId: null },
   });
   await context.answerCbQuery();
   await context.editMessageText(
