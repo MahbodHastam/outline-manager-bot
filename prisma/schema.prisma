@@ -15,6 +15,8 @@ model User {
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
   state      String    @default("IDLE")
+  /// Base URL for custom-domain key links; applies only to this user's servers.
+  customDomain String? @unique
 
   servers Server[]
 
@@ -23,12 +25,11 @@ model User {
 }
 
 model Server {
-  id           Int      @id @default(autoincrement())
-  apiUrl       String   @unique
-  alias        String?
-  customDomain String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id      Int      @id @default(autoincrement())
+  apiUrl  String   @unique
+  alias   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   userId BigInt
   user   User   @relation(fields: [userId], references: [telegramId])

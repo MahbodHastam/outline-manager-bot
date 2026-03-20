@@ -5,7 +5,7 @@ import OutlineService from '../services/outline.service';
 import { MyContext } from '../types/context';
 import { getOrCreateUser } from '../utils/user';
 import { keyboards } from '../views/keyboards';
-import { keyDetailsView, serverKeysView } from '../views/messages';
+import { keyDetailsView } from '../views/messages';
 import { USER_STATE } from '../constants/userState';
 
 const composer = new Composer<MyContext>();
@@ -73,7 +73,7 @@ composer.on('text', async (context) => {
     const customDomainRaw = incoming.trim();
     if (!customDomainRaw) {
       await context.reply(
-        'No custom domain provided. Please send the custom domain URL you want to use for this server.',
+        'No URL provided. Send your custom domain base URL (e.g. https://example.com/path/).',
       );
       return;
     }
@@ -97,29 +97,14 @@ composer.on('text', async (context) => {
       );
     }
 
-    if (!user.selectedServerId) {
-      await context.prisma.user.update({
-        where: { telegramId: user.telegramId },
-        data: { state: USER_STATE.IDLE },
-      });
-      return editTempMessage(
-        'No server is currently selected. Please select a server again.',
-        keyboards.main,
-      );
-    }
-
-    const server = await context.prisma.server.update({
-      where: { id: user.selectedServerId },
-      data: { customDomain },
-    });
-
     await context.prisma.user.update({
       where: { telegramId: user.telegramId },
-      data: { state: USER_STATE.IDLE },
+      data: { state: USER_STATE.IDLE, customDomain },
     });
 
-    await editTempMessage('✅ Custom domain saved for this server.');
-    await serverKeysView(context, server);
+    await editTempMessage(
+      '✅ Custom domain saved. It applies only to your servers in this bot.',
+    );
     return;
   }
 
@@ -193,8 +178,10 @@ composer.on('text', async (context) => {
       return;
     }
 
-    await context.reply('✅ Key renamed successfully.');
-    await keyDetailsView(context, server, keyId);
+    await keyDetailsView(context, server, keyId, {
+      sendAsNewMessage: true,
+      preface: '✅ Key renamed successfully.',
+    });
   }
 });
 

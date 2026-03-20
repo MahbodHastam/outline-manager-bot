@@ -5,6 +5,7 @@ import { getOrCreateUser } from '../utils/user';
 import { keyboards } from '../views/keyboards';
 import { keyDetailsView, serverKeysView } from '../views/messages';
 import { getActualAccessUrl, getDisplayAccessUrl } from '../utils/accessUrl';
+import { getCustomDomainBaseForOwner } from '../utils/userCustomDomain';
 import { getOrCreateKeyAlias } from '../utils/keyAlias';
 import { USER_STATE } from '../constants/userState';
 
@@ -168,17 +169,21 @@ composer.action('create_key', async (context) => {
   }
 
   if (newKey) {
-    const keyAlias = server.customDomain
+    const ownerDomain = await getCustomDomainBaseForOwner(
+      context.prisma,
+      server.userId,
+    );
+    const keyAlias = ownerDomain
       ? await getOrCreateKeyAlias(context.prisma, server, newKey.id)
       : undefined;
     const displayAccessUrl = getDisplayAccessUrl(
       newKey.accessUrl,
-      server,
+      ownerDomain,
       keyAlias,
     );
     const directAccessUrl = getActualAccessUrl(newKey.accessUrl);
     await context.replyWithHTML(
-      server.customDomain
+      ownerDomain
         ? `<b>New Key Created</b>\n\nAccess URL (Custom Domain):\n<pre>${displayAccessUrl}</pre>\n\nAccess URL (Direct):\n<pre>${directAccessUrl}</pre>`
         : `<b>New Key Created</b>\n\nAccess URL:\n<pre>${directAccessUrl}</pre>`,
     );

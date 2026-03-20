@@ -4,6 +4,7 @@ import OutlineService, { OutlineKey } from '../services/outline.service';
 import { MyContext } from '../types/context';
 import { keyboards } from './keyboards';
 import { getActualAccessUrl, getDisplayAccessUrl } from '../utils/accessUrl';
+import { getCustomDomainBaseForOwner } from '../utils/userCustomDomain';
 import { getOrCreateKeyAlias } from '../utils/keyAlias';
 
 const KEYS_PAGE_SIZE = 10;
@@ -26,9 +27,26 @@ export const serverKeysView = async (
 
   if (!keys) {
     await context.answerCbQuery('❌ Failed to fetch keys from the server.');
+    const serverIdentifier = server.alias || new URL(server.apiUrl).hostname;
     return context.editMessageText(
-      'Could not connect to your Outline server. Please check the URL and server status.',
-      keyboards.backToServers,
+      [
+        'Could not connect to your Outline server.',
+        `(<b>${serverIdentifier}</b>)`,
+        '',
+        'Please check the URL and server status, or remove this server from the bot.',
+      ].join('\n'),
+      {
+        parse_mode: 'HTML',
+        reply_markup: Markup.inlineKeyboard([
+          [
+            Markup.button.callback(
+              '🗑️ Delete this server',
+              `delete_server_${server.id}`,
+            ),
+          ],
+          [Markup.button.callback('🔙 Back to Server List', 'manage_servers')],
+        ]).reply_markup,
+      },
     );
   }
 
@@ -56,42 +74,40 @@ export const serverKeysView = async (
 
   const canGoPrev = clampedPage > firstPage;
   const canGoNext = clampedPage < lastPage;
-  const noop = `keys_page_noop_${server.id}_${clampedPage}`;
 
   const paginationRow = [
-    Markup.button.callback(
-      '⏮️',
-      canGoPrev ? `keys_page_${server.id}_${firstPage}` : noop,
-    ),
-    Markup.button.callback(
-      '◀️',
-      canGoPrev ? `keys_page_${server.id}_${prevPage}` : noop,
-    ),
+    ...(canGoPrev
+      ? [
+          Markup.button.callback('⏮️', `keys_page_${server.id}_${firstPage}`),
+          Markup.button.callback('◀️', `keys_page_${server.id}_${prevPage}`),
+        ]
+      : []),
     Markup.button.callback(
       `${clampedPage + 1}/${totalPages}`,
       `keys_page_current_${server.id}_${clampedPage}`,
     ),
-    Markup.button.callback(
-      '▶️',
-      canGoNext ? `keys_page_${server.id}_${nextPage}` : noop,
-    ),
-    Markup.button.callback(
-      '⏭️',
-      canGoNext ? `keys_page_${server.id}_${lastPage}` : noop,
-    ),
+    ...(canGoNext
+      ? [
+          Markup.button.callback('▶️', `keys_page_${server.id}_${nextPage}`),
+          Markup.button.callback('⏭️', `keys_page_${server.id}_${lastPage}`),
+        ]
+      : []),
   ];
 
   const fullKeyboard = Markup.inlineKeyboard([
     ...keyButtons,
     paginationRow,
     [Markup.button.callback('➕ Create New Key', 'create_key')],
-    [Markup.button.callback('🌐 Custom Domain Settings', 'custom_domain_menu')],
     [Markup.button.callback('🔙 Back to Server List', 'manage_servers')],
   ]);
 
   const serverIdentifier = server.alias || new URL(server.apiUrl).hostname;
-  const customDomainInfo = server.customDomain
-    ? `\n🌐 Custom Domain: <code>${server.customDomain || 'Not Set'}</code>`
+  const ownerDomain = await getCustomDomainBaseForOwner(
+    context.prisma,
+    server.userId,
+  );
+  const customDomainInfo = ownerDomain
+    ? `\n🌐 Your custom domain: <code>${ownerDomain}</code>`
     : '';
 
   await context.editMessageText(
@@ -106,44 +122,75 @@ export const serverKeysView = async (
   );
 };
 
+export type KeyDetailsViewOptions = {
+  /** Use when the update came from a normal message (e.g. rename); bot cannot edit the keys list message. */
+  sendAsNewMessage?: boolean;
+  /** Prepended when `sendAsNewMessage` is true (e.g. success line). */
+  preface?: string;
+};
+
 export const keyDetailsView = async (
   context: MyContext,
   server: Server,
   keyId: string,
+  options?: KeyDetailsViewOptions,
 ) => {
   const outline = new OutlineService(server.apiUrl);
   const keys = await outline.getKeys();
   const key = keys?.find((k) => k.id === keyId);
 
   if (!key) {
+    if (options?.sendAsNewMessage) {
+      await context.reply(
+        '❌ Key not found or could not be fetched. Open your server from the menu and try again.',
+      );
+      return;
+    }
     await context.answerCbQuery('❌ Key not found or could not be fetched.');
     return serverKeysView(context, server);
   }
 
-  const keyAlias = server.customDomain
+  const ownerDomain = await getCustomDomainBaseForOwner(
+    context.prisma,
+    server.userId,
+  );
+  const keyAlias = ownerDomain
     ? await getOrCreateKeyAlias(context.prisma, server, key.id)
     : undefined;
-  const displayAccessUrl = getDisplayAccessUrl(key.accessUrl, server, keyAlias);
+  const displayAccessUrl = getDisplayAccessUrl(
+    key.accessUrl,
+    ownerDomain,
+    keyAlias,
+  );
   const directAccessUrl = getActualAccessUrl(key.accessUrl);
 
-  const detailsText = [
+  const body = [
     `<b>Key Details</b>`,
     `<b>Name:</b> ${key.name || 'Not set'}`,
     `<b>ID:</b> ${key.id}`,
-    server.customDomain
+    ownerDomain
       ? `\nAccess URL (Custom Domain):\n<pre>${displayAccessUrl}</pre>\n\nAccess URL (Direct):\n<pre>${directAccessUrl}</pre>`
       : `\nAccess URL:\n<pre>${directAccessUrl}</pre>`,
   ].join('\n');
 
+  const detailsText = options?.preface ? `${options.preface}\n\n${body}` : body;
+
+  const replyMarkup = Markup.inlineKeyboard([
+    [
+      Markup.button.callback(
+        '🔙 Back to Key List',
+        `select_server_${server.id}`,
+      ),
+    ],
+  ]).reply_markup;
+
+  if (options?.sendAsNewMessage) {
+    await context.replyWithHTML(detailsText, { reply_markup: replyMarkup });
+    return;
+  }
+
   await context.editMessageText(detailsText, {
     parse_mode: 'HTML',
-    reply_markup: Markup.inlineKeyboard([
-      [
-        Markup.button.callback(
-          '🔙 Back to Key List',
-          `select_server_${server.id}`,
-        ),
-      ],
-    ]).reply_markup,
+    reply_markup: replyMarkup,
   });
 };

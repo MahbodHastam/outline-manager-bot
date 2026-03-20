@@ -1,5 +1,3 @@
-import type { Server } from '@prisma/client';
-
 export const getActualAccessUrl = (accessUrl: string) => {
   try {
     const normalizedUrl = new URL(accessUrl);
@@ -14,24 +12,31 @@ export const getActualAccessUrl = (accessUrl: string) => {
   }
 };
 
+/** Plain `ss://...` for bot UI; strips `outline` if present. */
 export const getDisplayAccessUrl = (
   accessUrl: string,
-  server: Server,
+  customDomainBase: string | null | undefined,
   keyAlias?: string,
 ) => {
   const actualAccessUrl = getActualAccessUrl(accessUrl);
-  if (!server.customDomain || !keyAlias) return actualAccessUrl;
+  if (!customDomainBase?.trim() || !keyAlias) return actualAccessUrl;
 
   try {
-    const customBase = new URL(
-      server.customDomain.endsWith('/')
-        ? server.customDomain
-        : `${server.customDomain}/`,
-    );
+    const base = customDomainBase.trim();
+    const customBase = new URL(base.endsWith('/') ? base : `${base}/`);
 
     const result = new URL(keyAlias, customBase.toString());
     return result.toString();
   } catch {
     return actualAccessUrl;
   }
+};
+
+/**
+ * Response body for the custom-domain HTTP handler / Outline client:
+ * sanitized key URL with `?outline=1` (or `&outline=1`) appended.
+ */
+export const getAccessUrlForOutlineClient = (accessUrl: string) => {
+  const base = getActualAccessUrl(accessUrl);
+  return base.includes('?') ? `${base}&outline=1` : `${base}?outline=1`;
 };

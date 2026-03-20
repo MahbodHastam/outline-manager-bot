@@ -1,27 +1,33 @@
 import * as http from 'http';
 import { prisma } from './prisma';
 import OutlineService from '../services/outline.service';
-import { getActualAccessUrl } from '../utils/accessUrl';
+import { getAccessUrlForOutlineClient } from '../utils/accessUrl';
 
 const toPathPrefix = (pathname: string) => {
   if (!pathname || pathname === '/') return '/';
   return pathname.endsWith('/') ? pathname : `${pathname}/`;
 };
 
-const findServerByHostAndPath = async (
+/**
+ * Find the bot user whose saved custom-domain base matches this HTTP request.
+ * Each Telegram user has at most one customDomain; it applies only to their servers.
+ */
+const findOwnerForRequest = async (
   hostname: string,
   port: string,
-  path: string,
+  pathname: string,
 ) => {
-  const servers = await prisma.server.findMany({
+  const usersWithDomain = await prisma.user.findMany({
     where: { customDomain: { not: null } },
+    select: { telegramId: true, customDomain: true },
   });
 
-  for (const server of servers) {
-    if (!server.customDomain) continue;
+  for (const row of usersWithDomain) {
+    const base = row.customDomain?.trim();
+    if (!base) continue;
 
     try {
-      const customDomainUrl = new URL(server.customDomain);
+      const customDomainUrl = new URL(base);
       const domainHostname = customDomainUrl.hostname.toLowerCase();
       const domainPort = customDomainUrl.port;
 
@@ -29,9 +35,9 @@ const findServerByHostAndPath = async (
       if (domainPort && domainPort !== port) continue;
 
       const pathPrefix = toPathPrefix(customDomainUrl.pathname);
-      if (pathPrefix !== '/' && !path.startsWith(pathPrefix)) continue;
+      if (pathPrefix !== '/' && !pathname.startsWith(pathPrefix)) continue;
 
-      return { server, pathPrefix };
+      return { ownerTelegramId: row.telegramId, pathPrefix };
     } catch {
       continue;
     }
@@ -42,9 +48,8 @@ const findServerByHostAndPath = async (
 
 export const startCustomDomainServer = () => {
   const port = Number(
-    process.env.CUSTOM_DOMAIN_PORT || process.env.ENV === 'production'
-      ? 80
-      : 8080,
+    process.env.CUSTOM_DOMAIN_PORT ??
+      (process.env.ENV === 'production' ? '80' : '8080'),
   );
 
   const server = http.createServer(async (req, res) => {
@@ -63,23 +68,22 @@ export const startCustomDomainServer = () => {
         requestUrl.pathname.startsWith('/access-key/')
       ) {
         const parts = requestUrl.pathname.split('/').filter(Boolean);
-        // ['access-key', '<serverId>', '<keyId>']
         if (parts.length === 3) {
           const [, serverIdStr, keyId] = parts;
           const serverId = Number(serverIdStr);
 
           if (!Number.isNaN(serverId)) {
-            const server = await prisma.server.findUnique({
+            const outlineServer = await prisma.server.findUnique({
               where: { id: serverId },
             });
 
-            if (!server) {
+            if (!outlineServer) {
               res.writeHead(404, { 'Content-Type': 'application/json' });
               res.end(JSON.stringify({ error: 'Server not found.' }));
               return;
             }
 
-            const outline = new OutlineService(server.apiUrl);
+            const outline = new OutlineService(outlineServer.apiUrl);
             const keys = await outline.getKeys();
             const key = keys?.find((k) => k.id === keyId);
 
@@ -94,7 +98,7 @@ export const startCustomDomainServer = () => {
               JSON.stringify({
                 id: key.id,
                 name: key.name,
-                accessUrl: getActualAccessUrl(key.accessUrl),
+                accessUrl: getAccessUrlForOutlineClient(key.accessUrl),
               }),
             );
             return;
@@ -105,22 +109,23 @@ export const startCustomDomainServer = () => {
         res.end(JSON.stringify({ error: 'Invalid access-key route.' }));
         return;
       }
-      const found = await findServerByHostAndPath(
+
+      const matched = await findOwnerForRequest(
         requestUrl.hostname,
         requestUrl.port,
         requestUrl.pathname,
       );
 
-      if (!found) {
+      if (!matched) {
         res.writeHead(404, { 'Content-Type': 'text/plain' });
         res.end('No custom-domain route found for this request.');
         return;
       }
 
       const relativePath =
-        found.pathPrefix === '/'
+        matched.pathPrefix === '/'
           ? requestUrl.pathname.slice(1)
-          : requestUrl.pathname.slice(found.pathPrefix.length);
+          : requestUrl.pathname.slice(matched.pathPrefix.length);
       const keyAlias = relativePath.replace(/^\/+|\/+$/g, '');
 
       if (!keyAlias || keyAlias.includes('/')) {
@@ -133,13 +138,30 @@ export const startCustomDomainServer = () => {
         where: { alias: keyAlias },
       });
 
-      if (!aliasRecord || aliasRecord.serverId !== found.server.id) {
+      if (!aliasRecord) {
         res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
         res.end('Access key alias not found.');
         return;
       }
 
-      const outline = new OutlineService(found.server.apiUrl);
+      const outlineServer = await prisma.server.findUnique({
+        where: { id: aliasRecord.serverId },
+      });
+
+      if (!outlineServer) {
+        await prisma.accessKeyAlias.delete({ where: { alias: keyAlias } });
+        res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+        res.end('Server not found.');
+        return;
+      }
+
+      if (outlineServer.userId !== matched.ownerTelegramId) {
+        res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+        res.end('Access key alias not found.');
+        return;
+      }
+
+      const outline = new OutlineService(outlineServer.apiUrl);
       const keys = await outline.getKeys();
       const key = keys?.find((item) => item.id === aliasRecord.outlineKeyId);
 
@@ -152,12 +174,12 @@ export const startCustomDomainServer = () => {
         return;
       }
 
-      const actualAccessUrl = getActualAccessUrl(key.accessUrl);
+      const body = getAccessUrlForOutlineClient(key.accessUrl);
       res.writeHead(200, {
         'Content-Type': 'text/plain; charset=utf-8',
         'Cache-Control': 'no-store',
       });
-      res.end(actualAccessUrl);
+      res.end(body);
     } catch (error) {
       console.error('Custom domain routing error ->', error);
       res.writeHead(500, { 'Content-Type': 'text/plain' });
