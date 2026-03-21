@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { bot } from './core/bot';
 import { startCustomDomainServer } from './core/custom-domain-server';
 import { prisma } from './core/prisma';
+import { allowedUsersMiddleware } from './middleware/allowed-users';
 import {
   startComposer,
   serverComposer,
@@ -10,6 +11,7 @@ import {
   textComposer,
 } from './composers';
 
+bot.use(allowedUsersMiddleware);
 bot.use((context, next) => {
   context.prisma = prisma;
   return next();
