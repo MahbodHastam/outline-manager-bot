@@ -79,7 +79,7 @@ This project provides a Telegram bot that acts as a user-friendly interface for 
    ```sh
    tmux
    pnpm start
-   # Press CTRL+A then D to detach
+   # Press CTRL+B then D to detach
    ```
 
 ## Configuration
