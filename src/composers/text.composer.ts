@@ -7,6 +7,7 @@ import { getOrCreateUser } from '../utils/user';
 import { keyboards } from '../views/keyboards';
 import { keyDetailsView } from '../views/messages';
 import { USER_STATE } from '../constants/userState';
+import { handleMigrateWizardText } from './migrate.composer';
 
 const composer = new Composer<MyContext>();
 type EditMessageExtra = Parameters<typeof bot.telegram.editMessageText>[4];
@@ -59,6 +60,10 @@ const handleApiUrlInput = async (context: MyContext, user: User) => {
 composer.on('text', async (context) => {
   const user = await getOrCreateUser(context);
   if (!user) return;
+
+  if (await handleMigrateWizardText(context, user)) {
+    return;
+  }
 
   if (user.state === USER_STATE.AWAITING_API_URL) {
     await handleApiUrlInput(context, user);

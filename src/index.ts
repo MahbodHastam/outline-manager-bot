@@ -6,6 +6,7 @@ import {
   startComposer,
   serverComposer,
   keyComposer,
+  migrateComposer,
   textComposer,
 } from './composers';
 
@@ -17,6 +18,7 @@ bot.use((context, next) => {
 bot.use(startComposer);
 bot.use(serverComposer);
 bot.use(keyComposer);
+bot.use(migrateComposer);
 bot.use(textComposer);
 
 bot.catch((error, context) => {

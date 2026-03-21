@@ -15,7 +15,6 @@ model User {
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
   state      String    @default("IDLE")
-  /// Base URL for custom-domain key links; applies only to this user's servers.
   customDomain String? @unique
 
   servers Server[]

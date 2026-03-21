@@ -98,6 +98,12 @@ export const serverKeysView = async (
     ...keyButtons,
     paginationRow,
     [Markup.button.callback('➕ Create New Key', 'create_key')],
+    [
+      Markup.button.callback(
+        '📦 Migrate to new server',
+        `migrate_server_${server.id}`,
+      ),
+    ],
     [Markup.button.callback('🔙 Back to Server List', 'manage_servers')],
   ]);
 

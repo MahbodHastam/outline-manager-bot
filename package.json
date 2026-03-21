@@ -20,10 +20,12 @@
     "@prisma/client": "^6.9.0",
     "dotenv": "^16.5.0",
     "prisma": "^6.9.0",
+    "ssh2": "^1.17.0",
     "telegraf": "^4.16.3"
   },
   "devDependencies": {
     "@types/node": "^22.15.30",
+    "@types/ssh2": "^1.15.5",
     "husky": "^9.1.7",
     "lint-staged": "^16.1.0",
     "prettier": "^3.5.3",

@@ -66,16 +66,15 @@ class OutlineService {
 
       const req = https.request(options, (res) => {
         if (res.statusCode && (res.statusCode < 200 || res.statusCode >= 300)) {
-          if (method === 'DELETE' && res.statusCode === 204) {
-            return resolve({} as T);
-          }
           return reject(
             new Error(`Request failed with status code ${res.statusCode}`),
           );
         }
 
-        if (method === 'DELETE' && res.statusCode === 204) {
-          return resolve({} as T);
+        if (res.statusCode === 204) {
+          res.resume();
+          res.on('end', () => resolve({} as T));
+          return;
         }
 
         let responseBody = '';
@@ -116,6 +115,24 @@ class OutlineService {
       return true;
     } catch (error) {
       console.error('Failed to validate API URL ->', error);
+      return false;
+    }
+  }
+
+  /**
+   * Sets the hostname embedded in ss:// access URLs (in-memory + persisted). Required after
+   * migrating disks so existing keys show the new server IP without restarting Shadowbox.
+   */
+  public async setHostnameForAccessKeys(hostname: string): Promise<boolean> {
+    try {
+      await this._requestWithRetry<Record<string, never>>(
+        'PUT',
+        'server/hostname-for-access-keys',
+        { hostname },
+      );
+      return true;
+    } catch (error) {
+      console.error('Failed to set hostname for access keys ->', error);
       return false;
     }
   }

@@ -18,6 +18,7 @@
   - [Prerequisites](#prerequisites)
   - [Installation](#installation)
 - [Configuration](#️-configuration)
+- [SSH migration](#-ssh-migration)
 - [Development](#-development)
 
 ---
@@ -32,6 +33,7 @@ This project provides a Telegram bot that acts as a user-friendly interface for 
 - **Key management** — Create and delete access keys directly from Telegram
 - **Custom domains** — Use custom domain URLs instead of server IPs when sharing access links
 - **Key aliases** — Short, shareable URLs (e.g. `https://your-domain.com/USER-UNIQUE-ID`) when using custom domains
+- **SSH migration** — Move Outline from an old host to a new host
 
 ## Getting Started
 
@@ -72,7 +74,7 @@ This project provides a Telegram bot that acts as a user-friendly interface for 
    pnpm start
    ```
 
-   For long-running sessions, you can use tmux:
+   You can use tmux or set up a system service. I prefer tmux for now.
 
    ```sh
    tmux
@@ -82,12 +84,24 @@ This project provides a Telegram bot that acts as a user-friendly interface for 
 
 ## Configuration
 
-| Variable              | Description                                                                 | Example                                     |
-| --------------------- | --------------------------------------------------------------------------- | ------------------------------------------- |
-| `BOT_TOKEN`           | **Required.** Your Telegram bot token from [@BotFather](https://t.me/BotFather). | `123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11` |
-| `DATABASE_URL`        | **Required.** SQLite database path (relative to prisma directory).          | `file:./database.db`                        |
-| `CUSTOM_DOMAIN_PORT`  | Port for the custom domain HTTP server. Default: 8080 (dev) or 80 (production). | `80`                                        |
-| `ENV`                 | Set to `production` to use port 80 for the custom domain server.             | `production`                                |
+| Variable             | Description                                                                      | Example                                     |
+| -------------------- | -------------------------------------------------------------------------------- | ------------------------------------------- |
+| `BOT_TOKEN`          | **Required.** Your Telegram bot token from [@BotFather](https://t.me/BotFather). | `123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11` |
+| `DATABASE_URL`       | **Required.** SQLite database path (relative to prisma directory).               | `file:./database.db`                        |
+| `CUSTOM_DOMAIN_PORT` | Port for the custom domain HTTP server. Default: 8080 (dev) or 80 (production).  | `80`                                        |
+| `ENV`                | Set to `production` to use port 80 for the custom domain server.                 | `production`                                |
+
+## SSH migration
+
+From **Manage servers** → open a server → **Migrate to new server**, the bot walks through SSH details for the current Outline host and the target host. It verifies the **new** server is **Ubuntu LTS** with **`VERSION_ID` ≥ 22.04** (e.g. 22.04, 24.04), checks Docker, stops Outline-related containers on the old host, then runs **`docker save` → `docker load`** and **`tar`** so that **large data flows directly from old → new over SSH** (the new host connects to the old; the bot does not relay image/tar bytes). Containers are recreated on the new host using `docker inspect` metadata.
+
+### Prerequisites
+
+- **Network:** The machine running the bot must reach **both** hosts on SSH (control only). The **new** server must be able to reach the **old** server on its SSH port — that path carries the Docker and `/opt/outline` streams.
+- **Privileges:** On **both** hosts, the SSH user must run **`docker`** and access **`/opt/outline`** without interactive **sudo** (often `root` or passwordless sudo). The **new** host may auto-install **`sshpass`** (via `apt`) if missing, so it can open SSH to the old host non-interactively.
+- **Target OS:** New server must be **Ubuntu LTS** with **22.04 or newer** (e.g. 24.04 LTS).
+- **Telegram and passwords:** The bot uses **password** SSH auth. Use a **temporary SSH password** and rotate it after migration.
+- **Native dependency:** `ssh2` may require allowed install scripts (e.g. `pnpm approve-builds`) so native addons can build on your platform.
 
 ## Development
 

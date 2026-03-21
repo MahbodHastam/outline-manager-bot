@@ -4,3 +4,4 @@ node_modules
 dist/
 prisma/dev.db
 prisma/dev.db-journal
+.pnpm-store
