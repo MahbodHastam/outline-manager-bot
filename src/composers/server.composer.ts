@@ -215,7 +215,7 @@ composer.action('set_custom_domain', async (context) => {
       'Send your custom domain <b>base URL</b> (applies only to your servers).',
       '',
       'Example:',
-      '<code>https://doomxs-service.fun/vip-user/</code>',
+      '<code>https://example.com</code>',
       '',
       'The HTTP server on this bot must be reachable at that host so Outline can resolve each key alias.',
     ].join('\n'),
